@@ -20,7 +20,7 @@ import os
 from torch.optim.lr_scheduler import MultiStepLR
 from ppuda.config import init_config
 from ppuda.ghn.nn import GHN, ghn_parallel
-from ppuda.vision.loader import image_loader
+from ppuda.vision.loader import image_loader, image_loader_clip
 from ppuda.deepnets1m.loader import DeepNets1M
 from ppuda.utils import capacity, Trainer
 from ppuda.deepnets1m.net import Network
@@ -30,7 +30,17 @@ def main():
 
     args = init_config(mode='train_ghn')
 
-    train_queue, val_queue, num_classes = image_loader(args.dataset,
+    print(args)
+
+    # train_queue, val_queue, num_classes = image_loader(args.dataset,
+    #                                                    args.data_dir,
+    #                                                    test=False,
+    #                                                    batch_size=args.batch_size,
+    #                                                    test_batch_size=args.test_batch_size,
+    #                                                    num_workers=args.num_workers,
+    #                                                    seed=args.seed)
+
+    train_queue, val_queue, num_classes = image_loader_clip(args.dataset,
                                                        args.data_dir,
                                                        test=False,
                                                        batch_size=args.batch_size,
@@ -114,56 +124,27 @@ def main():
         failed_batches = 0
 
         for step, (images, targets) in enumerate(train_queue):
-
+            print("targets", targets)
             upd, loss = False, torch.zeros(1, device=args.device)
-            while not upd:
-                try:
-                    graphs = next(graphs_queue)
+            graphs = next(graphs_queue)
 
-                    nets_torch = []
+            nets_torch = []
 
-                    for nets_args in graphs.net_args:
-                        net = Network(is_imagenet_input=is_imagenet,
-                                      num_classes=num_classes,
-                                      light=True,
-                                      **nets_args)
-                        nets_torch.append(net)
+            for nets_args in graphs.net_args:
+                net = Network(is_imagenet_input=is_imagenet,
+                                num_classes=num_classes,
+                                light=True,
+                                **nets_args)
+                nets_torch.append(net)
 
-                    loss = trainer.update(nets_torch, images, targets, ghn=ghn, graphs=graphs)
-                    trainer.log()
+            print("About to calculate loss...")
+            print("Length of nets_torch:", len(nets_torch))
+            loss = trainer.update(nets_torch, images, targets, ghn=ghn, graphs=graphs)
+            trainer.log()
 
-                    for ind in graphs.net_inds:
-                        seen_nets.add(ind)
-                    upd = True
-
-                except RuntimeError as e:
-                    print('error', type(e), e)
-                    oom = str(e).find('out of memory') >= 0
-                    is_nan = torch.isnan(loss) or str(e).find('the loss is') >= 0
-                    if oom or is_nan:
-                        if failed_batches > len(train_queue) // 50:
-                            print('Out of patience (after %d attempts to continue), '
-                                  'please restart the job with another seed !!!' % failed_batches)
-                            raise
-
-                        if oom:
-                            print('CUDA out of memory, attempt to clean memory #%d' % failed_batches)
-                            if args.multigpu:
-                                ghn = ghn.module
-                            ghn.to('cpu')
-                            torch.cuda.empty_cache()
-                            ghn.to(args.device)
-                            if args.multigpu:
-                                ghn = ghn_parallel(ghn)
-
-                        failed_batches += 1
-
-                    else:
-                        raise
-
-            del images, targets, graphs, nets_torch, loss
-            if step % 10 == 0:
-                torch.cuda.empty_cache()
+            for ind in graphs.net_inds:
+                seen_nets.add(ind)
+            upd = True
 
         if args.save:
             # Save config necessary to restore GHN configuration when evaluating it

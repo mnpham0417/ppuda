@@ -287,14 +287,23 @@ class Network(nn.Module):
                 s = 4 if (stem_type == 1 or stem_pool) else 8
             C_prev *= s ** 2
 
-        fc = [lin_layer(light)(C_prev, fc_dim if fc_layers > 1 else num_classes)]
-        for i in range(fc_layers - 1):
-            assert fc_dim > 0, fc_dim
-            fc.append(nn.ReLU(inplace=True))
-            fc.append(nn.Dropout(p=0.5, inplace=False))
-            fc.append(lin_layer(light)(in_features=fc_dim, out_features=fc_dim if i < fc_layers - 2 else num_classes))
+        # fc = [lin_layer(light)(C_prev, fc_dim if fc_layers > 1 else num_classes)]
+        # for i in range(fc_layers - 1):
+        #     assert fc_dim > 0, fc_dim
+        #     fc.append(nn.ReLU(inplace=True))
+        #     fc.append(nn.Dropout(p=0.5, inplace=False))
+        #     fc.append(lin_layer(light)(in_features=fc_dim, out_features=fc_dim if i < fc_layers - 2 else num_classes))
+        # self.classifier = nn.Sequential(*fc)
+        
+        fc = [lin_layer(light)(C_prev, 512)]
         self.classifier = nn.Sequential(*fc)
-
+        # print("Getting classifier info")
+        # for l in fc:
+        #     try:
+        #         l.print()
+        #     except:
+        #         print(l)
+        # print("Classifier info printed \n")
         if light:
             self.__dict__['_layered_modules'] = named_layered_modules(self)
 

@@ -14,10 +14,9 @@ Supports ImageNet and torchvision datasets, such as CIFAR-10 and CIFAR-100.
 import os
 import torch
 from torchvision.datasets import *
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from .transforms import transforms_cifar, transforms_imagenet
 from .imagenet import ImageNetDataset
-
 
 def image_loader(dataset='imagenet', data_dir='./data/', test=True, im_size=32,
                  batch_size=64, test_batch_size=64, num_workers=0,
@@ -116,6 +115,45 @@ def image_loader(dataset='imagenet', data_dir='./data/', test=True, im_size=32,
                               pin_memory=True, num_workers=num_workers, generator=generator)
 
     return train_loader, valid_loader, n_classes
+
+def image_loader_clip(dataset='imagenet', data_dir='./data/', test=True, im_size=32,
+                 batch_size=64, test_batch_size=64, num_workers=0,
+                 cutout=False, cutout_length=16, noise=False,
+                 seed=1111, load_train_anyway=False, n_shots=None):
+
+    dataset = dataset.upper()
+    train_transform, valid_transform = transforms_cifar(cutout=cutout, cutout_length=cutout_length, noise=noise, sz=im_size)
+
+    #cifar clip trainset
+    trainset = CIFAR10_CLIP(data_dir, transform=train_transform)
+
+    train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True,
+                              pin_memory=True, num_workers=num_workers)  
+
+    return train_loader, None, 10
+
+class CIFAR10_CLIP(Dataset):
+    def __init__(self, data_dir, transform):
+        import clip
+        self.dataset = CIFAR10(root=data_dir, train=True, download=True, transform=transform)
+        
+        #cifar classes text
+        self.classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        self.classes_text = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+        self.idx_to_class = {v: k for k, v in self.class_to_idx.items()}
+        self.num_classes = len(self.classes)
+        self.num_examples = len(self.dataset)
+        self.transform = transform
+        
+    
+    def __getitem__(self, index):
+        img, target = self.dataset[index]
+
+        return img, f"a photo of {self.classes[target]}"
+
+    def __len__(self):
+        return len(self.dataset)
 
 
 def to_few_shot(dataset, n_shots=100):
