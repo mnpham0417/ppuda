@@ -14,13 +14,12 @@ Example:
 
 """
 
-
 import torch
 import os
 from torch.optim.lr_scheduler import MultiStepLR
 from ppuda.config import init_config
 from ppuda.ghn.nn import GHN, ghn_parallel
-from ppuda.vision.loader import image_loader, image_loader_clip
+from ppuda.vision.loader import image_loader, image_loader_clip, image_loader_yfcc15m
 from ppuda.deepnets1m.loader import DeepNets1M
 from ppuda.utils import capacity, Trainer
 from ppuda.deepnets1m.net import Network
@@ -40,13 +39,15 @@ def main():
     #                                                    num_workers=args.num_workers,
     #                                                    seed=args.seed)
 
-    train_queue, val_queue, num_classes = image_loader_clip(args.dataset,
-                                                       args.data_dir,
-                                                       test=False,
-                                                       batch_size=args.batch_size,
-                                                       test_batch_size=args.test_batch_size,
-                                                       num_workers=args.num_workers,
-                                                       seed=args.seed)
+    # train_queue, val_queue, num_classes = image_loader_clip(args.dataset,
+    #                                                    args.data_dir,
+    #                                                    test=False,
+    #                                                    batch_size=args.batch_size,
+    #                                                    test_batch_size=args.test_batch_size,
+    #                                                    num_workers=args.num_workers,
+    #                                                    seed=args.seed)
+
+    train_queue = image_loader_yfcc15m(args.yfcc_csv_path, None)
 
     is_imagenet = args.dataset == 'imagenet'
     graphs_queue = DeepNets1M.loader(args.meta_batch_size,
@@ -55,7 +56,6 @@ def main():
                                      virtual_edges=args.virtual_edges,
                                      num_nets=args.num_nets,
                                      large_images=is_imagenet)
-
 
     start_epoch = 0
     state_dict = None
@@ -66,7 +66,7 @@ def main():
     else:
         config = {}
         config['max_shape'] = args.max_shape
-        config['num_classes'] = num_classes
+        # config['num_classes'] = num_classes
         config['hypernet'] = args.hypernet
         config['decoder'] = args.decoder
         config['weight_norm'] = args.weight_norm
@@ -102,14 +102,13 @@ def main():
             scheduler.step(start_epoch)
 
     trainer = Trainer(optimizer,
-                      num_classes,
                       is_imagenet,
                       n_batches=len(train_queue),
                       grad_clip=args.grad_clip,
                       device=ghn.device_ids if args.multigpu else args.device,
                       log_interval=args.log_interval,
                       amp=args.amp)
-
+    num_classes = 10 #dummy variable
 
     seen_nets = set()
 

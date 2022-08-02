@@ -17,6 +17,11 @@ from torchvision.datasets import *
 from torch.utils.data import DataLoader, Dataset
 from .transforms import transforms_cifar, transforms_imagenet
 from .imagenet import ImageNetDataset
+import pandas as pd
+import json
+from PIL import Image
+import random
+import clip
 
 def image_loader(dataset='imagenet', data_dir='./data/', test=True, im_size=32,
                  batch_size=64, test_batch_size=64, num_workers=0,
@@ -134,7 +139,6 @@ def image_loader_clip(dataset='imagenet', data_dir='./data/', test=True, im_size
 
 class CIFAR10_CLIP(Dataset):
     def __init__(self, data_dir, transform):
-        import clip
         self.dataset = CIFAR10(root=data_dir, train=True, download=True, transform=transform)
         
         #cifar classes text
@@ -154,6 +158,55 @@ class CIFAR10_CLIP(Dataset):
 
     def __len__(self):
         return len(self.dataset)
+
+class YFCC15M(Dataset):
+    def __init__(self, csv_path, transform=None):
+        self.csv_path = csv_path
+        self.pd_data = pd.read_csv(csv_path)
+        self.data_len = len(self.pd_data)
+        self.transform = transform
+
+    def get_pd_data(self):
+        return self.pd_data
+
+    def __len__(self):
+        return self.data_len
+
+    def __getitem__(self, idx):
+        path = self.pd_data.iloc[idx]["filepath"]
+
+        #load image
+        while True:
+            try: #in case of error, randomly sample another image
+                img = Image.open(path)
+                break
+            except:
+                idx = random.randint(0, self.data_len-1)
+                path = self.pd_data.iloc[idx]["filepath"]
+                continue
+
+        #if 1 channel, convert to 3 channel
+        if img.mode == "L":
+            img = img.convert("RGB")
+
+        #load label
+        text = self.pd_data.iloc[idx]["title"]
+        text = clip.tokenize([text])
+
+        if self.transform:
+            img = self.transform(img)
+
+        return img, text
+
+def image_loader_yfcc15m(csv_path, batch_size, num_workers):
+
+    #cifar clip trainset
+    trainset = YFCC15M(csv_path=csv_path)
+
+    train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True,
+                              pin_memory=True, num_workers=num_workers)  
+
+    return train_loader
 
 
 def to_few_shot(dataset, n_shots=100):

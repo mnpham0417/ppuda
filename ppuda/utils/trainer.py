@@ -15,13 +15,17 @@ from torch.nn.parallel import *
 from .utils import *
 from .darts_utils import *
 
+def CLIP_loss():
+    pass
 
 class Trainer():
-    def __init__(self, optimizer, num_classes, is_imagenet, n_batches,
+    def __init__(self, optimizer, is_imagenet, n_batches,
                  grad_clip=5, auxiliary=False, auxiliary_weight=0.4, device='cuda',
                  log_interval=100, amp=False):
         self.optimizer = optimizer
-        criterion = CrossEntropyLabelSmooth(num_classes, 0.1) if is_imagenet else nn.CrossEntropyLoss()
+
+        #criterion for CLIP
+        criterion = CLIP_loss()
         self.criterion = criterion.to(device[0] if isinstance(device, (list, tuple)) else device)
         self.n_batches = n_batches
         self.grad_clip = grad_clip
